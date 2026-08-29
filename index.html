@@ -111,6 +111,7 @@
   .period-row span.tilde { color: var(--ink-soft); font-size: 0.8rem; }
   .period-row button { flex-shrink: 0; border: none; background: var(--gold); color: var(--ink); border-radius: 8px; padding: 0.55rem 1rem; font-weight: 700; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; font-size: 0.85rem; }
   .version-banner { position: sticky; top: 0; z-index: 50; background: var(--ink); color: var(--paper); text-align: center; font-size: 0.68rem; padding: 0.25rem 0; letter-spacing: 0.02em; }
+  .pw-gate { position:fixed; inset:0; z-index:9999; background:var(--paper); display:flex; align-items:center; justify-content:center; padding:1.5rem; }
   .pw-gate.hide { display: none; }
   .app-toast { position: fixed; left: 50%; bottom: 1.4rem; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff; padding: 0.7rem 1.1rem; border-radius: 10px; font-size: 0.85rem; max-width: 90vw; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.25); opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; z-index: 200; }
   .app-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -122,7 +123,7 @@
 </style>
 </head>
 <body>
-<div class="pw-gate" id="pw-gate" style="position:fixed; inset:0; z-index:9999; background:var(--paper); display:flex; align-items:center; justify-content:center; padding:1.5rem;">
+<div class="pw-gate" id="pw-gate">
   <div style="max-width:320px; width:100%; text-align:center;">
     <div style="font-size:0.7rem; letter-spacing:0.3em; color:var(--leaf); font-weight:700; text-transform:uppercase; margin-bottom:0.5rem;">오늘땄데이딸기농장</div>
     <div style="font-family:'Noto Sans KR', sans-serif; font-weight:900; font-size:1.3rem; color:var(--ink); margin-bottom:1.3rem;">🍓 수확량장부</div>
@@ -329,7 +330,7 @@ async function initAuthGate() {
   renderGoogleSignInButton();
 }
 </script>
-<div class="version-banner">버전 v2026-08-29-48 (데이터 불러오기 단계마다 시간제한 걸어서 멈춤 방지)</div>
+<div class="version-banner">버전 v2026-08-29-49 (진짜 원인 발견: 로그인화면 숨기기가 인라인 스타일에 막혀있던 문제 해결)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
