@@ -302,18 +302,34 @@ document.getElementById('gsi-script').addEventListener('load', () => {
   if (needsSignInButton && isPwGateVisible()) renderGoogleSignInButton();
 });
 async function initAuthGate() {
-  loadSbSession();
-  if (sbSession && ALLOWED_EMAILS.includes(sbSession.email) && await ensureFreshSbSession()) {
-    document.getElementById('pw-gate').classList.add('hide');
-    startApp();
-  } else {
-    clearSbSession();
+  const err = document.getElementById('pw-error');
+  try {
+    loadSbSession();
+    if (err) err.textContent = sbSession ? `저장된 로그인(${sbSession.email}) 확인 중...` : '저장된 로그인 없음';
+    if (sbSession && ALLOWED_EMAILS.includes(sbSession.email)) {
+      const fresh = await ensureFreshSbSession();
+      if (fresh) {
+        if (err) err.textContent = '데이터 불러오는 중...';
+        await startApp();
+        document.getElementById('pw-gate').classList.add('hide');
+        return;
+      } else if (err) {
+        err.textContent = '로그인이 만료됐어요. 다시 로그인해주세요.';
+      }
+    }
+  } catch (e) {
+    console.error('initAuthGate error', e);
+    if (err) err.textContent = '오류 발생: ' + (e && e.message ? e.message : String(e));
     needsSignInButton = true;
     renderGoogleSignInButton();
+    return;
   }
+  clearSbSession();
+  needsSignInButton = true;
+  renderGoogleSignInButton();
 }
 </script>
-<div class="version-banner">버전 v2026-08-29-45 (로그인 버튼 안 뜨는 문제 수정: 실패 시 자동 재시도)</div>
+<div class="version-banner">버전 v2026-08-29-46 (로그인 진행 상태를 화면에 표시하도록 수정)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
