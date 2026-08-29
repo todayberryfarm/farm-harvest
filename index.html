@@ -38,7 +38,7 @@
   .type-row { display: flex; gap: 0.5rem; align-items: stretch; }
   .type-row input { flex: 1; border: 1.5px solid var(--paper-line); border-radius: 8px; padding: 0.7rem 0.8rem; font-size: 0.95rem; font-family: inherit; min-height: 66px; box-sizing: border-box; }
   .type-row button { border: none; background: var(--gold); color: var(--ink); border-radius: 10px; padding: 0 1.1rem; font-weight: 700; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; font-size: 0.92rem; }
-  .mic-btn { border: none; background: var(--gold); color: #fff; border-radius: 10px; cursor: pointer; width: 54px; padding: 0.6rem; flex-shrink: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+  .mic-btn { border: none; background: var(--gold); color: #fff; border-radius: 10px; cursor: pointer; width: 54px; padding: 0.25rem; flex-shrink: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
   .mic-btn svg { width: 100%; height: 100%; transform: scale(1.55); }
   .type-row .mic-btn { color: #fff; }
   .mic-btn.rec { background: var(--berry); animation: micpulse 1.1s infinite; }
@@ -331,7 +331,7 @@ async function initAuthGate() {
   renderGoogleSignInButton();
 }
 </script>
-<div class="version-banner">버전 v2026-08-29-57 (마이크 아이콘 확대해서 박스 꽉 채움)</div>
+<div class="version-banner">버전 v2026-08-29-58 (마이크 안쪽 여백 축소로 아이콘 확대)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
