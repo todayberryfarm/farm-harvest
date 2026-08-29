@@ -271,12 +271,27 @@ async function handleGoogleCredential(response) {
   startApp();
 }
 let signInButtonRendered = false;
+let signInButtonAttempts = 0;
 function renderGoogleSignInButton() {
   if (signInButtonRendered) return;
   if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(renderGoogleSignInButton, 300); return; }
-  signInButtonRendered = true;
-  google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
-  google.accounts.id.renderButton(document.getElementById('g_id_signin_wrap'), { theme: 'outline', size: 'large', text: 'signin_with', locale: 'ko' });
+  signInButtonAttempts++;
+  try {
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, use_fedcm_for_prompt: true });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin_wrap'), { theme: 'outline', size: 'large', text: 'signin_with', locale: 'ko' });
+  } catch (e) {}
+  // 버튼이 실제로 그려졌는지 0.4초 뒤 확인하고, 안 그려졌으면 다시 시도 (최대 20회, 8초)
+  setTimeout(() => {
+    const wrap = document.getElementById('g_id_signin_wrap');
+    if (wrap && wrap.innerHTML.trim()) {
+      signInButtonRendered = true;
+    } else if (signInButtonAttempts < 20) {
+      setTimeout(renderGoogleSignInButton, 400);
+    } else {
+      const err = document.getElementById('pw-error');
+      if (err) err.textContent = '로그인 버튼을 불러오지 못했어요. 새로고침(Ctrl+Shift+R) 해주세요.';
+    }
+  }, 400);
 }
 let needsSignInButton = false;
 function isPwGateVisible() {
@@ -298,7 +313,7 @@ async function initAuthGate() {
   }
 }
 </script>
-<div class="version-banner">버전 v2026-08-29-44 (농장일지와 동일한 구글 로그인·백업 시스템 확인 완료)</div>
+<div class="version-banner">버전 v2026-08-29-45 (로그인 버튼 안 뜨는 문제 수정: 실패 시 자동 재시도)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
