@@ -329,7 +329,7 @@ async function initAuthGate() {
   renderGoogleSignInButton();
 }
 </script>
-<div class="version-banner">버전 v2026-08-29-46 (로그인 진행 상태를 화면에 표시하도록 수정)</div>
+<div class="version-banner">버전 v2026-08-29-47 (데이터 불러오기 단계별 진행상황 표시)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
@@ -2219,11 +2219,18 @@ function render() {
 })();
 
 async function startApp() {
+  const err = document.getElementById('pw-error');
+  const step = (msg) => { if (err) err.textContent = msg; };
+  step('구역 정보 불러오는 중...');
   await loadZones();
+  step('음성인식 단어 불러오는 중...');
   await loadVocab();
   renderZoneSelects();
+  step('수확 기록 불러오는 중...');
   await loadEntries();
+  step('백업 상태 확인 중...');
   await loadBackupMeta();
+  step('화방 설정 불러오는 중...');
   await loadManualTroughs();
   updateBackupReminder();
   initGoogleDrive();
