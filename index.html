@@ -270,22 +270,11 @@ async function handleGoogleCredential(response) {
   document.getElementById('pw-gate').classList.add('hide');
   startApp();
 }
-let signInButtonRendered = false;
 function renderGoogleSignInButton() {
-  if (signInButtonRendered) return;
   if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(renderGoogleSignInButton, 300); return; }
-  signInButtonRendered = true;
   google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
   google.accounts.id.renderButton(document.getElementById('g_id_signin_wrap'), { theme: 'outline', size: 'large', text: 'signin_with', locale: 'ko' });
 }
-let needsSignInButton = false;
-function isPwGateVisible() {
-  const gate = document.getElementById('pw-gate');
-  return gate && !gate.classList.contains('hide');
-}
-document.getElementById('gsi-script').addEventListener('load', () => {
-  if (needsSignInButton && isPwGateVisible()) renderGoogleSignInButton();
-});
 async function initAuthGate() {
   loadSbSession();
   if (sbSession && ALLOWED_EMAILS.includes(sbSession.email) && await ensureFreshSbSession()) {
@@ -293,12 +282,11 @@ async function initAuthGate() {
     startApp();
   } else {
     clearSbSession();
-    needsSignInButton = true;
     renderGoogleSignInButton();
   }
 }
 </script>
-<div class="version-banner">버전 v2026-09-13-1 (구글드라이브 자동백업 추가)</div>
+<div class="version-banner">버전 v2026-09-13-2 (로그인 화면 초기화 로직을 다른 앱과 동일하게 통일)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
