@@ -258,9 +258,22 @@ window.storage = {
 };
 
 // ---------- 로그인 화면(구글 계정) — 수확량장부만 "페이지 전체가 구글로 넘어갔다 돌아오는" 방식 ----------
+function randomNonce() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+function decodeJwtPayload(jwt) {
+  try {
+    const base64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(atob(base64).split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''));
+    return JSON.parse(json);
+  } catch (e) { return null; }
+}
 function startGoogleRedirectLogin() {
   const redirectUri = location.origin + location.pathname;
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token&scope=${encodeURIComponent('openid email profile')}&prompt=select_account`;
+  const nonce = randomNonce();
+  try { sessionStorage.setItem('gauth_nonce', nonce); } catch (e) {}
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token&scope=${encodeURIComponent('openid email profile')}&nonce=${encodeURIComponent(nonce)}&prompt=select_account`;
   location.href = url;
 }
 document.getElementById('google-login-redirect-btn').addEventListener('click', startGoogleRedirectLogin);
@@ -273,6 +286,13 @@ async function handleRedirectIdTokenIfPresent() {
   history.replaceState(null, '', location.pathname + location.search); // 주소창에 남은 토큰 자국 지우기
   if (!idToken) return false;
   const err = document.getElementById('pw-error');
+  let expectedNonce = null;
+  try { expectedNonce = sessionStorage.getItem('gauth_nonce'); sessionStorage.removeItem('gauth_nonce'); } catch (e) {}
+  const payload = decodeJwtPayload(idToken);
+  if (expectedNonce && payload && payload.nonce !== expectedNonce) {
+    err.textContent = '로그인 확인에 실패했어요. 다시 시도해주세요.';
+    return true;
+  }
   err.textContent = '로그인 확인 중...';
   const ok = await exchangeGoogleIdToken(idToken);
   if (!ok) { err.textContent = '로그인에 실패했어요. 다시 시도해주세요.'; return true; }
@@ -298,7 +318,7 @@ async function initAuthGate() {
   }
 }
 </script>
-<div class="version-banner">버전 v2026-09-13-3 (수확량장부만 구글 로그인 방식을 전체 이동형으로 변경)</div>
+<div class="version-banner">버전 v2026-09-13-4 (구글 로그인 nonce 누락 오류 수정)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
