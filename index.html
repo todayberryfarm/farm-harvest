@@ -127,7 +127,10 @@
     <div style="font-size:0.7rem; letter-spacing:0.3em; color:var(--leaf); font-weight:700; text-transform:uppercase; margin-bottom:0.5rem;">오늘땄데이딸기농장</div>
     <div style="font-family:'Noto Sans KR', sans-serif; font-weight:900; font-size:1.3rem; color:var(--ink); margin-bottom:1.3rem;">🍓 수확량장부</div>
     <p style="color:var(--ink-soft); font-size:0.88rem; margin:0 0 1rem;" id="pw-sub">구글 계정으로 로그인해주세요</p>
-    <div id="g_id_signin_wrap" style="display:flex; justify-content:center; margin-bottom:0.6rem;"></div>
+    <button type="button" id="google-login-redirect-btn" style="display:flex; align-items:center; justify-content:center; gap:0.6rem; width:100%; margin:0 0 0.6rem; padding:0.75rem 1rem; border:1.5px solid #dadce0; border-radius:8px; background:#fff; color:#3c4043; font-size:0.95rem; font-weight:500; cursor:pointer; font-family:'Noto Sans KR', sans-serif;">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+      구글 계정으로 로그인
+    </button>
     <div id="pw-error" style="color:var(--berry); font-size:0.82rem; margin-top:0.8rem; min-height:1.2em;"></div>
   </div>
 </div>
@@ -254,39 +257,48 @@ window.storage = {
   }
 };
 
-// ---------- 로그인 화면(구글 계정, 농장일지와 동일) ----------
-async function handleGoogleCredential(response) {
-  const idToken = response.credential;
+// ---------- 로그인 화면(구글 계정) — 수확량장부만 "페이지 전체가 구글로 넘어갔다 돌아오는" 방식 ----------
+function startGoogleRedirectLogin() {
+  const redirectUri = location.origin + location.pathname;
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token&scope=${encodeURIComponent('openid email profile')}&prompt=select_account`;
+  location.href = url;
+}
+document.getElementById('google-login-redirect-btn').addEventListener('click', startGoogleRedirectLogin);
+
+// 구글 로그인 페이지에서 돌아왔을 때, 주소 뒤에 #id_token=...으로 붙어서 와요. 그걸 읽어서 로그인 처리함
+async function handleRedirectIdTokenIfPresent() {
+  if (!location.hash || location.hash.indexOf('id_token=') === -1) return false;
+  const params = new URLSearchParams(location.hash.slice(1));
+  const idToken = params.get('id_token');
+  history.replaceState(null, '', location.pathname + location.search); // 주소창에 남은 토큰 자국 지우기
+  if (!idToken) return false;
   const err = document.getElementById('pw-error');
   err.textContent = '로그인 확인 중...';
   const ok = await exchangeGoogleIdToken(idToken);
-  if (!ok) { err.textContent = '로그인에 실패했어요. 다시 시도해주세요.'; return; }
+  if (!ok) { err.textContent = '로그인에 실패했어요. 다시 시도해주세요.'; return true; }
   if (!ALLOWED_EMAILS.includes(sbSession.email)) {
     err.textContent = `이 계정(${sbSession.email})은 사용할 수 없어요. 등록된 계정으로 로그인해주세요.`;
     clearSbSession();
-    return;
+    return true;
   }
   err.textContent = '';
   document.getElementById('pw-gate').classList.add('hide');
   startApp();
-}
-function renderGoogleSignInButton() {
-  if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(renderGoogleSignInButton, 300); return; }
-  google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
-  google.accounts.id.renderButton(document.getElementById('g_id_signin_wrap'), { theme: 'outline', size: 'large', text: 'signin_with', locale: 'ko' });
+  return true;
 }
 async function initAuthGate() {
+  const handledRedirect = await handleRedirectIdTokenIfPresent();
+  if (handledRedirect) return;
   loadSbSession();
   if (sbSession && ALLOWED_EMAILS.includes(sbSession.email) && await ensureFreshSbSession()) {
     document.getElementById('pw-gate').classList.add('hide');
     startApp();
   } else {
     clearSbSession();
-    renderGoogleSignInButton();
   }
 }
 </script>
-<div class="version-banner">버전 v2026-09-13-2 (로그인 화면 초기화 로직을 다른 앱과 동일하게 통일)</div>
+<div class="version-banner">버전 v2026-09-13-3 (수확량장부만 구글 로그인 방식을 전체 이동형으로 변경)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
