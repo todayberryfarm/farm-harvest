@@ -162,12 +162,14 @@ function scheduleSbRefresh(expiresInSec) {
   const ms = Math.max(30, (expiresInSec || 3600) - 120) * 1000;
   sbRefreshTimer = setTimeout(() => { refreshSbSession(); }, ms);
 }
-async function exchangeGoogleIdToken(idToken) {
+async function exchangeGoogleIdToken(idToken, nonce) {
   try {
+    const body = { provider: 'google', id_token: idToken };
+    if (nonce) body.nonce = nonce;
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=id_token`, {
       method: 'POST',
       headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'google', id_token: idToken })
+      body: JSON.stringify(body)
     });
     if (!res.ok) return false;
     const data = await res.json();
@@ -294,7 +296,7 @@ async function handleRedirectIdTokenIfPresent() {
     return true;
   }
   err.textContent = '로그인 확인 중...';
-  const ok = await exchangeGoogleIdToken(idToken);
+  const ok = await exchangeGoogleIdToken(idToken, expectedNonce);
   if (!ok) { err.textContent = '로그인에 실패했어요. 다시 시도해주세요.'; return true; }
   if (!ALLOWED_EMAILS.includes(sbSession.email)) {
     err.textContent = `이 계정(${sbSession.email})은 사용할 수 없어요. 등록된 계정으로 로그인해주세요.`;
@@ -318,7 +320,7 @@ async function initAuthGate() {
   }
 }
 </script>
-<div class="version-banner">버전 v2026-09-13-4 (구글 로그인 nonce 누락 오류 수정)</div>
+<div class="version-banner">버전 v2026-09-13-5 (Supabase로 nonce값 전달 누락 수정)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
