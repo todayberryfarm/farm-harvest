@@ -264,65 +264,49 @@ window.storage = {
   }
 };
 
-// ---------- 로그인 화면(구글 계정) — 수확량장부만 "페이지 전체가 구글로 넘어갔다 돌아오는" 방식 ----------
-function randomNonce() {
-  if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-async function sha256Hex(text) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-function decodeJwtPayload(jwt) {
-  try {
-    const base64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const json = decodeURIComponent(atob(base64).split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''));
-    return JSON.parse(json);
-  } catch (e) { return null; }
-}
-async function startGoogleRedirectLogin() {
+// ---------- 로그인 화면(구글 계정) — 수확량장부만, Supabase가 구글과의 인증을 대신 처리하는 방식 ----------
+function startGoogleRedirectLogin() {
   const redirectUri = location.origin + location.pathname;
-  const rawNonce = randomNonce();
-  const hashedNonce = await sha256Hex(rawNonce);
-  try { sessionStorage.setItem('gauth_nonce', rawNonce); } catch (e) {}
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token&scope=${encodeURIComponent('openid email profile')}&nonce=${encodeURIComponent(hashedNonce)}&prompt=select_account`;
+  const url = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUri)}`;
   location.href = url;
 }
 document.getElementById('google-login-redirect-btn').addEventListener('click', startGoogleRedirectLogin);
 
-// 구글 로그인 페이지에서 돌아왔을 때, 주소 뒤에 #id_token=...으로 붙어서 와요. 그걸 읽어서 로그인 처리함
-async function handleRedirectIdTokenIfPresent() {
-  if (!location.hash || location.hash.indexOf('id_token=') === -1) return false;
+// 로그인을 마치고 돌아오면 주소 뒤에 #access_token=...으로 붙어서 와요. 그걸 읽어서 로그인 처리함
+async function handleSupabaseRedirectIfPresent() {
+  if (!location.hash || location.hash.indexOf('access_token=') === -1) return false;
   const params = new URLSearchParams(location.hash.slice(1));
-  const idToken = params.get('id_token');
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  const expiresIn = parseInt(params.get('expires_in') || '3600', 10);
   history.replaceState(null, '', location.pathname + location.search); // 주소창에 남은 토큰 자국 지우기
-  if (!idToken) return false;
+  if (!accessToken) return false;
   const err = document.getElementById('pw-error');
-  let expectedNonce = null;
-  try { expectedNonce = sessionStorage.getItem('gauth_nonce'); sessionStorage.removeItem('gauth_nonce'); } catch (e) {}
-  const payload = decodeJwtPayload(idToken);
-  if (expectedNonce && payload) {
-    const expectedHashed = await sha256Hex(expectedNonce);
-    if (payload.nonce !== expectedHashed) {
-      err.textContent = '로그인 확인에 실패했어요. 다시 시도해주세요.';
+  err.textContent = '로그인 확인 중...';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${accessToken}` }
+    });
+    if (!res.ok) { err.textContent = '로그인에 실패했어요. 다시 시도해주세요.'; return true; }
+    const userInfo = await res.json();
+    const email = userInfo.email;
+    if (!ALLOWED_EMAILS.includes(email)) {
+      err.textContent = `이 계정(${email})은 사용할 수 없어요. 등록된 계정으로 로그인해주세요.`;
       return true;
     }
+    sbSession = { access_token: accessToken, refresh_token: refreshToken, expires_at: Math.floor(Date.now()/1000) + expiresIn, email };
+    saveSbSession();
+    scheduleSbRefresh(expiresIn);
+    err.textContent = '';
+    document.getElementById('pw-gate').classList.add('hide');
+    startApp();
+  } catch (e) {
+    err.textContent = '로그인에 실패했어요. 다시 시도해주세요.';
   }
-  err.textContent = '로그인 확인 중...';
-  const ok = await exchangeGoogleIdToken(idToken, expectedNonce);
-  if (!ok) { err.textContent = '로그인 실패 상세: ' + (window.__lastAuthErr || '(정보없음)'); return true; }
-  if (!ALLOWED_EMAILS.includes(sbSession.email)) {
-    err.textContent = `이 계정(${sbSession.email})은 사용할 수 없어요. 등록된 계정으로 로그인해주세요.`;
-    clearSbSession();
-    return true;
-  }
-  err.textContent = '';
-  document.getElementById('pw-gate').classList.add('hide');
-  startApp();
   return true;
 }
 async function initAuthGate() {
-  const handledRedirect = await handleRedirectIdTokenIfPresent();
+  const handledRedirect = await handleSupabaseRedirectIfPresent();
   if (handledRedirect) return;
   loadSbSession();
   if (sbSession && ALLOWED_EMAILS.includes(sbSession.email) && await ensureFreshSbSession()) {
@@ -333,7 +317,7 @@ async function initAuthGate() {
   }
 }
 </script>
-<div class="version-banner">버전 v2026-09-13-7 (임시 디버그: 로그인 실패 상세 표시)</div>
+<div class="version-banner">버전 v2026-09-13-8 (Supabase 호스팅 로그인 방식으로 전환)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
