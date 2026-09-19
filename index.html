@@ -264,6 +264,10 @@ function randomNonce() {
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 function decodeJwtPayload(jwt) {
   try {
     const base64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
@@ -271,11 +275,12 @@ function decodeJwtPayload(jwt) {
     return JSON.parse(json);
   } catch (e) { return null; }
 }
-function startGoogleRedirectLogin() {
+async function startGoogleRedirectLogin() {
   const redirectUri = location.origin + location.pathname;
-  const nonce = randomNonce();
-  try { sessionStorage.setItem('gauth_nonce', nonce); } catch (e) {}
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token&scope=${encodeURIComponent('openid email profile')}&nonce=${encodeURIComponent(nonce)}&prompt=select_account`;
+  const rawNonce = randomNonce();
+  const hashedNonce = await sha256Hex(rawNonce);
+  try { sessionStorage.setItem('gauth_nonce', rawNonce); } catch (e) {}
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token&scope=${encodeURIComponent('openid email profile')}&nonce=${encodeURIComponent(hashedNonce)}&prompt=select_account`;
   location.href = url;
 }
 document.getElementById('google-login-redirect-btn').addEventListener('click', startGoogleRedirectLogin);
@@ -291,9 +296,12 @@ async function handleRedirectIdTokenIfPresent() {
   let expectedNonce = null;
   try { expectedNonce = sessionStorage.getItem('gauth_nonce'); sessionStorage.removeItem('gauth_nonce'); } catch (e) {}
   const payload = decodeJwtPayload(idToken);
-  if (expectedNonce && payload && payload.nonce !== expectedNonce) {
-    err.textContent = '로그인 확인에 실패했어요. 다시 시도해주세요.';
-    return true;
+  if (expectedNonce && payload) {
+    const expectedHashed = await sha256Hex(expectedNonce);
+    if (payload.nonce !== expectedHashed) {
+      err.textContent = '로그인 확인에 실패했어요. 다시 시도해주세요.';
+      return true;
+    }
   }
   err.textContent = '로그인 확인 중...';
   const ok = await exchangeGoogleIdToken(idToken, expectedNonce);
@@ -320,7 +328,7 @@ async function initAuthGate() {
   }
 }
 </script>
-<div class="version-banner">버전 v2026-09-13-5 (Supabase로 nonce값 전달 누락 수정)</div>
+<div class="version-banner">버전 v2026-09-13-6 (nonce 해시 방식 수정)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
