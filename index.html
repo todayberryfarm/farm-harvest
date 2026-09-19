@@ -171,9 +171,14 @@ async function exchangeGoogleIdToken(idToken, nonce) {
       headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      let detail = '';
+      try { detail = await res.text(); } catch (e2) {}
+      window.__lastAuthErr = `HTTP ${res.status}: ${detail}`;
+      return false;
+    }
     const data = await res.json();
-    if (!data.access_token) return false;
+    if (!data.access_token) { window.__lastAuthErr = 'no access_token in response: ' + JSON.stringify(data); return false; }
     sbSession = {
       access_token: data.access_token,
       refresh_token: data.refresh_token,
@@ -305,7 +310,7 @@ async function handleRedirectIdTokenIfPresent() {
   }
   err.textContent = '로그인 확인 중...';
   const ok = await exchangeGoogleIdToken(idToken, expectedNonce);
-  if (!ok) { err.textContent = '로그인에 실패했어요. 다시 시도해주세요.'; return true; }
+  if (!ok) { err.textContent = '로그인 실패 상세: ' + (window.__lastAuthErr || '(정보없음)'); return true; }
   if (!ALLOWED_EMAILS.includes(sbSession.email)) {
     err.textContent = `이 계정(${sbSession.email})은 사용할 수 없어요. 등록된 계정으로 로그인해주세요.`;
     clearSbSession();
@@ -328,7 +333,7 @@ async function initAuthGate() {
   }
 }
 </script>
-<div class="version-banner">버전 v2026-09-13-6 (nonce 해시 방식 수정)</div>
+<div class="version-banner">버전 v2026-09-13-7 (임시 디버그: 로그인 실패 상세 표시)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
