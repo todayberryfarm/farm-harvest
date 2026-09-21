@@ -318,7 +318,7 @@ async function initAuthGate() {
   }
 }
 </script>
-<div class="version-banner">버전 v2026-09-13-10 (마이크 위치·크기를 농장일지와 통일)</div>
+<div class="version-banner">버전 v2026-09-13-11 (구역 관리에 "맨 위로" 순서변경 버튼 추가)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
@@ -712,6 +712,14 @@ async function deleteZone(name) {
   await saveZones();
   renderZoneSelects();
 }
+async function moveZoneToTop(name) {
+  const idx = zoneList.findIndex(z => z.name === name);
+  if (idx <= 0) return;
+  const [z] = zoneList.splice(idx, 1);
+  zoneList.unshift(z);
+  await saveZones();
+  renderZoneSelects();
+}
 function renderZoneSelects() {
   const curC = $('c-zone').value;
   const curF = $('filter-zone').value || '전체';
@@ -812,6 +820,7 @@ function renderZoneManageList() {
   $('zone-manage-list').innerHTML = zoneList.map((z, i) => `
     <div class="import-preview-row">
       <span class="ipm">${escapeHtml(z.name)} <span style="color:var(--ink-soft);font-size:0.72rem;">(${z.region} · ${entries.filter(e => e.zone === z.name).length}건${z.plantCount ? ` · ${z.plantCount.toLocaleString('ko-KR')}주` : ''})</span></span>
+      <button type="button" class="ipx zone-top-btn" data-i="${i}" title="맨 위로" style="color:var(--gold-deep);">⬆️</button>
       <button type="button" class="ipx zone-edit-toggle" data-i="${i}" style="color:var(--leaf);">✏️</button>
       <button type="button" class="ipx zone-del-btn" data-i="${i}">✕</button>
     </div>
@@ -825,6 +834,13 @@ function renderZoneManageList() {
       <button type="button" class="zone-edit-save" data-i="${i}">저장</button>
     </div>
   `).join('');
+  $('zone-manage-list').querySelectorAll('.zone-top-btn').forEach(btn => btn.addEventListener('click', async () => {
+    const i = parseInt(btn.dataset.i, 10);
+    const name = zoneList[i].name;
+    await moveZoneToTop(name);
+    renderZoneManageList();
+    showToast(`⬆️ "${name}"을(를) 맨 위로 옮겼어요.`);
+  }));
   $('zone-manage-list').querySelectorAll('.zone-edit-toggle').forEach(btn => btn.addEventListener('click', () => {
     const row = $('zone-edit-row-' + btn.dataset.i);
     row.style.display = row.style.display === 'none' ? 'block' : 'none';
