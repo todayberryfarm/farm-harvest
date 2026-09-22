@@ -318,7 +318,7 @@ async function initAuthGate() {
   }
 }
 </script>
-<div class="version-banner">버전 v2026-09-13-11 (구역 관리에 "맨 위로" 순서변경 버튼 추가)</div>
+<div class="version-banner">버전 v2026-09-13-12 (연도별 모종수 기능 추가)</div>
 <div id="backup-reminder-banner" style="display:none; position:sticky; top:22px; z-index:49; background:#D9A441; color:#24382E; text-align:center; font-size:0.76rem; padding:0.5rem 0.7rem; font-weight:700; align-items:center; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
   <span id="backup-reminder-text"></span>
   <button type="button" id="backup-reminder-btn" style="border:1.5px solid #24382E; background:#fff; color:#24382E; border-radius:999px; padding:0.25rem 0.8rem; font-size:0.74rem; font-weight:700; cursor:pointer; font-family:inherit;">지금 백업</button>
@@ -540,6 +540,25 @@ async function initAuthGate() {
   </div>
 </div>
 
+<div class="overlay" id="zone-plants-year-overlay">
+  <div class="confirm-card">
+    <h3 id="zone-plants-year-title">연도별 모종수</h3>
+    <div class="import-preview-row" style="border:none; padding:0 0 0.9rem;">해마다 모종수가 달라져도, 그 해 통계는 그 해 모종수로 정확히 계산돼요. 비워두면 기본 모종수를 대신 써요.</div>
+    <div class="cf-row">
+      <label class="field-label">시즌</label>
+      <select id="zone-plants-year-select"></select>
+    </div>
+    <div class="cf-row">
+      <label class="field-label">그 시즌 모종수 (주)</label>
+      <input type="number" id="zone-plants-year-input" inputmode="numeric" placeholder="예: 1200">
+    </div>
+    <div class="confirm-btns">
+      <button class="btn-cancel" id="zone-plants-year-cancel">취소</button>
+      <button class="btn-save" id="zone-plants-year-save">저장</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="trough-edit-overlay">
   <div class="confirm-card">
     <h3 id="trough-edit-title">화방 날짜 수정</h3>
@@ -684,7 +703,31 @@ async function saveZones() {
 }
 function getZoneNames() { return zoneList.map(z => z.name); }
 function getZone(name) { return zoneList.find(z => z.name === name); }
-function getZonePlantCount(name) { const z = getZone(name); return (z && z.plantCount) ? z.plantCount : 0; }
+function getZonePlantCount(name, seasonStartYear) {
+  const z = getZone(name);
+  if (seasonStartYear !== undefined) {
+    const key = `${name}|${seasonStartYear}`;
+    if (zonePlantCountsByYear[key] !== undefined) return zonePlantCountsByYear[key];
+  }
+  return (z && z.plantCount) ? z.plantCount : 0;
+}
+const ZONE_PLANTS_BY_YEAR_KEY = 'harvest-zone-plants-by-year';
+let zonePlantCountsByYear = {}; // { "구역명|시즌시작연도": 모종수 }
+async function loadZonePlantCountsByYear() {
+  try {
+    const res = await window.storage.get(ZONE_PLANTS_BY_YEAR_KEY, true);
+    zonePlantCountsByYear = (res && res.value) ? JSON.parse(res.value) : {};
+  } catch (e) { zonePlantCountsByYear = {}; }
+}
+async function saveZonePlantCountsByYear() {
+  try { await window.storage.set(ZONE_PLANTS_BY_YEAR_KEY, JSON.stringify(zonePlantCountsByYear), true); } catch (e) {}
+}
+async function setZonePlantCountForYear(name, seasonStartYear, count) {
+  const key = `${name}|${seasonStartYear}`;
+  if (count > 0) zonePlantCountsByYear[key] = count;
+  else delete zonePlantCountsByYear[key];
+  await saveZonePlantCountsByYear();
+}
 async function addZone(name, region, keywords, plantCount) {
   if (!name || getZoneNames().includes(name)) return false;
   zoneList.push({ name, region, plantCount: plantCount || 0, keywords: (keywords && keywords.length) ? keywords : defaultKeywords(name) });
@@ -720,6 +763,36 @@ async function moveZoneToTop(name) {
   await saveZones();
   renderZoneSelects();
 }
+let editingZonePlantsContext = null;
+function openZonePlantsYearOverlay(zoneName) {
+  editingZonePlantsContext = zoneName;
+  const thisSeasonStart = getFarmYearStart(new Date()).getFullYear();
+  const sel = $('zone-plants-year-select');
+  sel.innerHTML = '';
+  for (let y = thisSeasonStart + 1; y >= thisSeasonStart - 4; y--) {
+    const label = `${y % 100}-${(y + 1) % 100} 농사년도${y === thisSeasonStart ? ' (이번 시즌)' : ''}`;
+    sel.innerHTML += `<option value="${y}">${label}</option>`;
+  }
+  $('zone-plants-year-title').textContent = `연도별 모종수 — ${zoneName}`;
+  const fillInput = () => {
+    const y = parseInt(sel.value, 10);
+    const key = `${zoneName}|${y}`;
+    $('zone-plants-year-input').value = zonePlantCountsByYear[key] !== undefined ? zonePlantCountsByYear[key] : '';
+  };
+  sel.onchange = fillInput;
+  fillInput();
+  $('zone-plants-year-overlay').classList.add('show');
+}
+$('zone-plants-year-cancel').addEventListener('click', () => { $('zone-plants-year-overlay').classList.remove('show'); editingZonePlantsContext = null; });
+$('zone-plants-year-save').addEventListener('click', async () => {
+  if (!editingZonePlantsContext) return;
+  const y = parseInt($('zone-plants-year-select').value, 10);
+  const count = parseInt($('zone-plants-year-input').value, 10) || 0;
+  await setZonePlantCountForYear(editingZonePlantsContext, y, count);
+  $('zone-plants-year-overlay').classList.remove('show');
+  showToast('✅ 연도별 모종수를 저장했어요.');
+  editingZonePlantsContext = null;
+});
 function renderZoneSelects() {
   const curC = $('c-zone').value;
   const curF = $('filter-zone').value || '전체';
@@ -819,7 +892,8 @@ function renderZoneManageList() {
   $('zone-manage-count').textContent = `현재 총 ${zoneList.length}개 구역 (${getRegionNames().map(r => `${r} ${zoneList.filter(z=>z.region===r).length}개`).join(', ')})`;
   $('zone-manage-list').innerHTML = zoneList.map((z, i) => `
     <div class="import-preview-row">
-      <span class="ipm">${escapeHtml(z.name)} <span style="color:var(--ink-soft);font-size:0.72rem;">(${z.region} · ${entries.filter(e => e.zone === z.name).length}건${z.plantCount ? ` · ${z.plantCount.toLocaleString('ko-KR')}주` : ''})</span></span>
+      <span class="ipm">${escapeHtml(z.name)} <span style="color:var(--ink-soft);font-size:0.72rem;">(${z.region} · ${entries.filter(e => e.zone === z.name).length}건${z.plantCount ? ` · 기본 ${z.plantCount.toLocaleString('ko-KR')}주` : ''})</span></span>
+      <button type="button" class="ipx zone-plants-year-btn" data-i="${i}" title="연도별 모종수" style="color:var(--gold-deep);">📅</button>
       <button type="button" class="ipx zone-top-btn" data-i="${i}" title="맨 위로" style="color:var(--gold-deep);">⬆️</button>
       <button type="button" class="ipx zone-edit-toggle" data-i="${i}" style="color:var(--leaf);">✏️</button>
       <button type="button" class="ipx zone-del-btn" data-i="${i}">✕</button>
@@ -834,6 +908,10 @@ function renderZoneManageList() {
       <button type="button" class="zone-edit-save" data-i="${i}">저장</button>
     </div>
   `).join('');
+  $('zone-manage-list').querySelectorAll('.zone-plants-year-btn').forEach(btn => btn.addEventListener('click', () => {
+    const i = parseInt(btn.dataset.i, 10);
+    openZonePlantsYearOverlay(zoneList[i].name);
+  }));
   $('zone-manage-list').querySelectorAll('.zone-top-btn').forEach(btn => btn.addEventListener('click', async () => {
     const i = parseInt(btn.dataset.i, 10);
     const name = zoneList[i].name;
@@ -1205,7 +1283,7 @@ $('c-save').addEventListener('click', async () => {
 
 // ---------- 백업/복원 ----------
 function buildBackupPayload() {
-  return { entries, zones: zoneList, regions: regionList, varieties: varietyList, manualTroughs, savedAt: Date.now() };
+  return { entries, zones: zoneList, regions: regionList, varieties: varietyList, manualTroughs, zonePlantCountsByYear, savedAt: Date.now() };
 }
 let backupMeta = { lastBackupAt: null, entriesAtLastBackup: 0 };
 async function loadBackupMeta() {
@@ -1396,9 +1474,11 @@ $('restore-confirm-btn').addEventListener('click', async () => {
     regionList = (parsed.regions && parsed.regions.length) ? parsed.regions : regionList;
     varietyList = (parsed.varieties && parsed.varieties.length) ? parsed.varieties : varietyList;
     manualTroughs = (parsed.manualTroughs && typeof parsed.manualTroughs === 'object') ? parsed.manualTroughs : manualTroughs;
+    zonePlantCountsByYear = (parsed.zonePlantCountsByYear && typeof parsed.zonePlantCountsByYear === 'object') ? parsed.zonePlantCountsByYear : zonePlantCountsByYear;
     await saveEntries();
     await saveZones();
     await saveManualTroughs();
+    await saveZonePlantCountsByYear();
     render();
     renderZoneSelects();
     backupMeta.lastBackupAt = Date.now();
@@ -2060,6 +2140,7 @@ function renderPeriodStats() {
   if (start > end) { $('period-result').innerHTML = '<div class="empty">시작일이 종료일보다 늦어요.</div>'; return; }
   const filtered = entries.filter(e => e.date >= start && e.date <= end);
   if (filtered.length === 0) { $('period-result').innerHTML = '<div class="empty">해당 기간에 기록이 없어요.</div>'; return; }
+  const periodSeasonYear = getFarmYearStart(new Date(start)).getFullYear();
   const total = filtered.reduce((s,e) => s+e.amount, 0);
   const regionCardsHtml = getRegionNames().map(r => {
     const t = filtered.filter(e => e.region === r).reduce((s,e) => s+e.amount, 0);
@@ -2075,7 +2156,7 @@ function renderPeriodStats() {
   const zoneRows = Object.entries(zoneTotals).sort((a,b) => b[1]-a[1]).map(([zn,amt]) => {
     const z = getZone(zn);
     const color = z ? getRegionColor(z.region) : '#6B7267';
-    const plants = getZonePlantCount(zn);
+    const plants = getZonePlantCount(zn, periodSeasonYear);
     return `<div class="legend-row" style="flex-wrap:wrap;"><span class="legend-dot" style="background:${color}"></span><span class="legend-name">${escapeHtml(zn)}</span><span class="legend-val">${fmtKgCompact(amt)}</span><span style="flex-basis:100%; padding-left:18px; margin-top:-2px;">${fmtPerPlant(amt, plants)}</span></div>`;
   }).join('');
   const varietyTotals = {};
@@ -2087,7 +2168,7 @@ function renderPeriodStats() {
     varietyZones[v].add(e.zone);
   });
   const varietyRows = Object.entries(varietyTotals).sort((a,b) => b[1]-a[1]).map(([vn,amt]) => {
-    const plants = vn === '미지정' ? 0 : [...(varietyZones[vn]||[])].reduce((s,zn) => s+getZonePlantCount(zn), 0);
+    const plants = vn === '미지정' ? 0 : [...(varietyZones[vn]||[])].reduce((s,zn) => s+getZonePlantCount(zn, periodSeasonYear), 0);
     return `<div class="legend-row" style="flex-wrap:wrap;"><span class="legend-dot" style="background:${vn==='미지정'?'#B9B2A0':'var(--gold)'}"></span><span class="legend-name">🍓 ${escapeHtml(vn)}</span><span class="legend-val">${fmtKgCompact(amt)}</span><span style="flex-basis:100%; padding-left:18px; margin-top:-2px;">${fmtPerPlant(amt, plants)}</span></div>`;
   }).join('');
   $('period-result').innerHTML = `
@@ -2249,6 +2330,7 @@ async function startApp() {
   await loadEntries();
   await loadBackupMeta();
   await loadManualTroughs();
+  await loadZonePlantCountsByYear();
   updateBackupReminder();
   initGoogleDrive();
   if ($('account-status')) $('account-status').textContent = sbSession && sbSession.email ? `${sbSession.email}로 로그인 중` : '';
